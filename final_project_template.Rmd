@@ -1,32 +1,493 @@
 ---
-title: "BMIN503/EPID600 Project Template"
-author: "Your Name"
-output: 
-  html_document:
-    toc: false 
-    depth: 3 
-    theme: paper 
-    highlight: tango
 ---
-```{r set-options, echo=FALSE, cache=FALSE}
-options(width = 400)
-```  
-***
-Use this template to complete your project throughout the course. Your Final Project presentation in class will be based on the contents of this document. Replace the title/name and text below with your own, but leave the headers.
+title: "Final Project BMIN 503"
+author: "Catherine Najem"
+date: "12/8/2017"
+output:
+  html_document: default
+  pdf_document: default
+---
 
-### Overview
-In this section, give a brief a description of your project and its goal, what data you are using to complete it, and what three faculty/staff in different fields you have spoken to about your project with a brief summary of what you learned from each person. Include a link to your final project GitHub repository.
+```{r setup, echo=FALSE}
+#Creates figure image files in Knit folder
+library(knitr)
+opts_chunk$set(
+  tidy=FALSE,
+  cache=F,
+  echo=F,
+  dpi=100,
+  fig.width=6,
+  dev=c("png", "pdf"))
+```
+
+# Introduction
+Anti-neutrophil cytoplasmic antibody (ANCA)-associated vasculitis (AAV) is a group of diseases characterized by inflammation of blood vessels often leading to organ failure. AAV includes granulomatosis with polyangiitis (GPA), microscopic polyangiitis (MPA), and eosinophilic granulomatosis with polyangiitis (EGPA)1. While considerable progress has been made in the management and diagnosis of AAV, the pathogenesis of AAV is not completely understood. As in other autoimmune diseases, a link between microbes and AAV has been suggested, and a higher occurrence of pathogenic organisms may exist in patients with AAV compared to controls. Two randomized placebo-controlled trials demonstrated that co-trimoxazole (antibiotic) reduces the rate of relapse in GPA. Prior studies examining microbes in AAV relied only on culture-dependent approaches. Advances in high-throughput sequencing now allow a better understanding of the dynamic between mucosal microbiota and the host’s immune system14. Over the last decade, mucosal sites exposed to a high load of bacterial antigens (e.g gut) were deemed to be the initial site of autoimmune generation (e.g rheumatoid arthritis RA). Additionally, the gut microbiome has been studied as a modulator of the immune response in autoimmune rheumatic diseases, including RA and spondyloarthritis and inflammatory bowel disease. While a strong evidence of microbial effects on autoimmune rheumatic diseases has been generated, there remains a knowledge gap in our understanding of the intestinal microbiome in AAV.
+
+##Objective
+The objective of this study is to evaluate the potential role of the intestinal microbiome in AAV by defining the gut microbiome of patients with AAV (active and in remission) compared to healthy controls. The overarching hypothesis is that patients with active AAV have greater intestinal dysbiosis (perturbation in indigenous microbiota) compared to controls, and that patients with chronic relapsing AAV have a greater dysbiosis compared to patients with a new diagnosis of AAV, reflecting the effect of chronic immunosuppressive medications on the gut microbiome. Stool collection on patients with AAV will be performed at the Penn Vasculitis Center. 16S RNA seq data will be performed at the PennCHOP microbiome core. I am planning to work on it with Ceylan in the PennCHOP microbiome core and Dr. Hongzhe Li in the MSCE department. I am learning more about microbiome analysis using R and R codes.
+
+This study will be the first to investigate the potential role of the gut microbiome in AAV. It will determine whether there is a greater dysbiosis in the gut microbiome of patients with active AAV. Given the results of microbiome studies in other systemic autoimmune diseases, we are highly optimistic we will have both positive and cutting-edge findings. AAV is a group of chronic relapsing inflammatory diseases of unclear pathogenesis. Despite remarkable advances in therapy, relapses occur in up to 70% of patients, are associated with life-threatening organ damage, and use of toxic systemic glucocorticoids and immunosuppressive agents. Disease duration, a history of respiratory tract disease, and ANCA type are important risk factors for relapse in AAV. In specific host genetic background and certain environmental factors, immune tolerance may break down and lead to ANCA production, and an inappropriate chronic activation of the immune system. The source of this activated immune response remains unclear. Microbial organisms may be involved in inducing disease activity in AAV.
+
+This project is interdisciplinary involving collaboration between rheumatologists, statisticians, bioinformaticians, and microbiome experts. It can contribute to understanding the pathogenesis of vasculitis, and improve my abilities to work on microbiome analysis by gaining experience from microbiome experts and bioinformaticians.
+
+##Methods
+Participants will be provided with stool collection kits and rectal swabs to take home with them. Participants will ship the stool collection box (within 24 hours of collection) to the PennCHOP Microbiome Core. Stool samples will be aliquoted in the PennCHOP Microbiome Core.
+DNA extraction and bacterial16S rRNA sequencing will be conducted at the PennCHOP Microbiome Core. Isolated DNA will be quantified using the Picogreen system. Primers to amplify the bacterial 16S rRNA gene will be barcoded. PCR reactions will be carried out in quadruplicate using Accuprime. Each reaction will contain 50 nanograms of DNA and 10 pM of each primer. Primers annealing to the V1V2 region of the 16S bacterial gene will be used for amplification. Amplified 16S rDNA will be purified using a 1:1 volume of Agencourt AmPure XP beads. The purified products from the stool samples will be pooled in equal amounts and analyzed using the Illumina MiSeq. Positive controls will be included. 
+Bioinformatics Processing and Statistical Analysis: Sequence data will be processed using QIIME. Read pairs will be quality filtered and joined to form a complete V1V2 amplicon sequence. OTUs will be selected by clustering reads at 97% sequence similarity. Taxonomic assignments will be generated by comparison to the Greengenes reference database. A phylogenetic tree will be inferred from the OTU data using FastTree. Similarity between samples will be assessed by weighted and unweighted UniFrac distance. Data files from QIIME will be analyzed in the R environment for statistical computing. Global differences in bacterial community composition will be visualized using Principal Coordinates Analysis. Number of OTUs and Shannon diversity will be calculated for each sample. Categorical variables will be summarized by frequencies and compared using the chi-square test. Continuous variables will be summarized by mean, median, standard deviation, and range and compared using Student’s t-test or Wilcoxon Signed Rank test. 
+
+##Results
+The following report contains the analysis of 9 samples for the grant application.
+
+```{r load scripts, echo=FALSE, message=FALSE}
+#Load scripts for 16S analysis
+library(dplyr)
+library(qiimer)
+library(vegan)
+library(ape)
+library(forcats)
+library(ggplot2)
+library(RColorBrewer)
+library(gridExtra)
+library(kylemisc)
+library(reshape2)
+library(tidyr)
+library(pander)
+library(broom)
+library(lme4)
+library(lmerTest)
+```
+
+```{r helper functions}
+filter_low_coverage <- function(cts, perc_cutoff, min_ab=0){
+  frac_nonzero <- function (x) sum(x > min_ab) / length(x)
+  apply(cts, 1, frac_nonzero) >= perc_cutoff
+}
+
+se <- function(x) sd(x)/sqrt(length(x))
+
+tidy_permanova <- function(anov){
+  data.frame(Term = rownames(anov$aov.tab), anov$aov.tab, row.names = NULL) %>%
+    rename(p.value = Pr..F.)
+}
+
+run_glm <- function(props_toTest, s_toTest, form1, p_cutoff) {
+  
+  cts_toTest <- props_toTest %>%
+    melt() %>%
+    mutate(value = value+1) %>%
+    setNames(c("Taxa", "SampleID", "Abundance")) %>%
+    merge(s_toTest, by="SampleID") %>%
+    mutate(props = Abundance / otu_counts) %>%
+    mutate(props100 = props * 100) %>%
+    mutate(props_logit = -log(props/(1-props))) %>%
+    group_by(Taxa) %>%
+    mutate(props_logit_scaled = scale(props_logit)[,1]) %>%
+    ungroup()
+  
+  models <- cts_toTest %>%
+      group_by(Taxa) %>%
+      #do(tidy(glm(as.formula(form1), data=., family="binomial")))
+      do(mod = glm(form1 , data=., family="binomial"))
+
+  summaries <- lapply(1:length(models$mod), function(x) data.frame(tidy(models$mod[[x]]),
+                                                                 taxa=models$Taxa[[x]],
+                                                                 conv=models$mod[[x]]$converged))
+  
+  do.call(rbind, summaries) %>%
+    filter(conv) %>%
+    filter(term != '(Intercept)') %>%
+    
+    group_by(term) %>%
+    mutate(fdr = p.adjust(p.value, method="BH")) %>%
+    ungroup() %>%
+    mutate(SigLabel=ifelse(fdr <= 0.05, "*", "")) %>%
+    
+    filter(p.value<p_cutoff) #%>%
+    #select(which(!(colnames(.) %in% c("conv", "group"))))
+}
+```
+
+```{r define_constants code, echo=FALSE}
+# User defined variables
+mapping_file_fp <- "20170626_najem_mapping_file.txt"
+
+otu_table_fp <- file.path("otu", "otu_table.txt")
+split_library_log_fp <- file.path("library", "split_library_log.txt")
+uu_fp <- file.path("beta_diversity", "unweighted_unifrac_dm.txt")
+wu_fp <- file.path("beta_diversity", "weighted_normalized_unifrac_dm.txt")
+
+# Run parameters
+min_reads <- 1000
+options(scipen=1, digits=2)
+```
+
+```{r DeNOVO OTU code, echo=FALSE}
+# Assign sample mapping file
+s <- read_qiime_mapping_file(mapping_file_fp) %>%
+  mutate(study_group = factor(study_group, levels=c("Control", "Active"))) %>%
+  #mutate(current_antibiotics = factor(current_antibiotics, levels=c("Yes", "No"))) %>%
+  mutate(disease_stage = factor(disease_stage, levels=c("Control", "Newdiagnosis", "Chronicactive")))
+
+# Assign OTU table
+o <- read_qiime_otu_table(otu_table_fp)
+
+# Metadata in the form of truncated green genes assignments
+md <- sub("(; [kpcofgs]__)+$", "", o$metadata, perl=T)
+
+# Assignments data-frame
+adf <- split_assignments(md)
+a <- simplify_assignments(adf)
 
 
-### Introduction 
-In the first paragraph, describe the problem addressed, its significance, and some background to motivate the problem.
+read_counts <- read.csv(split_library_log_fp, sep="\t", skip=15, strip.white = FALSE, blank.lines.skip = TRUE,  header=FALSE, col.names=c("SampleID", "Read Counts"), stringsAsFactors = FALSE)
 
-In the second paragraph, explain why your problem is interdisciplinary, what fields can contribute to its understanding, and incorporate background related to what you learned from meeting with faculty/staff.
+read_counts <- read_counts[1:(nrow(read_counts)-2),]
+read_counts <- read_counts[order(read_counts$SampleID), ]
+rownames(read_counts) <- NULL
+s = merge(s, read_counts, by="SampleID", all.x = TRUE)
+
+s$Keep <- s$Read.Counts > min_reads
+s$Keep[grep("geneblock|extraction|DNA", s$SampleID, ignore.case = TRUE)] <- FALSE
+s$KeepLabel <- factor(ifelse(s$Keep, "Keep", "Discard"))
+
+cts <- o$counts[,s$SampleID[s$Keep]]
+
+# filter the unassigned
+is_mitochondrial <- grepl("mitochondria", adf$Family)
+is_chloroplast <- grepl("Chloroplast", adf$Class)
+is_unassigned <- grepl("Unassigned", adf$Kingdom)
+is_contam <- is_mitochondrial | is_chloroplast | is_unassigned
+write.table(a[is_contam], file="excluded_otus.tsv", quote=F, sep='\t')
+cts <- cts[!is_contam,]
+a <- a[!is_contam]
+adf <- adf[!is_contam,]
+rm(is_contam, is_mitochondrial, is_chloroplast, is_unassigned)
+
+cts_summed <- rowsum(cts, a)
+props <- sweep(cts_summed, 2, colSums(cts_summed), "/")
+s <- merge(s, data.frame(otu_counts= colSums(cts_summed)), by.x="SampleID", by.y="row.names", all.x=T)
+
+```
+
+```{r alpha diversity measures}
+s <- s %>%
+  merge(diversity(t(cts)), by.x="SampleID", by.y="row.names", all.x=T) %>%
+  rename(shannon = y) %>%
+  merge(rarefy(t(cts), 10000), by.x="SampleID", by.y="row.names", all.x=T) %>%
+  rename(richness10k = y) 
+```
+
+```{r beta diversity measures}
+uu <- read_qiime_distmat(uu_fp)
+uu <- dist_subset(uu, s$SampleID[s$Keep])
+
+wu <- read_qiime_distmat(wu_fp)
+wu <- dist_subset(wu, s$SampleID[s$Keep])
+```
+
+```{r}
+s_toTest <- s %>%
+  filter(Keep)
+```
+
+# Sequencing results
+
+Histogram of high quality paired reads per sample. The vertical line shows the minimum number of reads for analysis.
+
+```{r histogram, fig.width=5, fig.height=3, echo=FALSE}
+ggplot(s, aes(x=Read.Counts)) +
+    geom_histogram(binwidth=10000) +
+    geom_vline(xintercept = min_reads) +
+    theme_classic() +
+    theme_bw() + 
+    xlab("Number of reads in sample") +
+    ylab("Number of samples")
+```
+
+Read counts obtained from a sample versus the dna library concentration in ng/ul. 
+
+```{r fig.width=5, fig.height=3}
+s %>%
+  filter(Keep) %>%
+  mutate(Read.Counts = Read.Counts / 1000) %>%
+  ggplot(aes(x=library_concentration_ng_ul, y=Read.Counts)) +
+    geom_point() +
+    scale_color_brewer(palette="Paired") +
+    theme_bw() +
+    labs(
+        x="Library concentration (ng/ul)",
+        y="Read counts (x1000)",
+        color="Sample type"
+      )
+
+```
+
+## Alpha diversity: Richness (Number of taxa observed)
+
+```{r fig.width=5, fig.height=3}
+s %>%
+  filter(Keep) %>%
+  ggplot(aes(x=disease_stage, y=richness10k)) +
+    geom_boxplot() +
+    geom_point(aes(color=current_antibiotics)) +
+    scale_color_brewer(palette="Dark2") +
+    theme_bw() +
+    labs(x="Study group", color="Current\nantibiotics",
+         y="Number of OTUs observed\nat 10,000 reads per samples")
+
+```
+
+```{r fig.width=5, fig.height=3}
+s %>%
+  filter(Keep) %>%
+  ggplot(aes(x=BVAS_Score, y=richness10k)) +
+    geom_point(aes(shape=current_antibiotics, color=study_group)) +
+    scale_color_brewer(palette="Dark2") +
+    theme_bw() +
+    scale_shape_manual(values=c(19, 1)) + 
+    labs(x="BVAS Score", shape="Current\nantibiotics", color="",
+         y="Number of OTUs observed\nat 10,000 reads per samples")
+```
+
+Below are ANOVA tests to check group differences in richness levels of samples. We have also used linear models to check the association  of BVAS scores and richness.
+```{r}
+summary(aov(richness10k ~ study_group, data=s_toTest))
+summary(aov(richness10k ~ current_antibiotics, data=s_toTest))
+summary(aov(richness10k ~ Prednisone, data=s_toTest))
+summary(aov(richness10k ~ disease_stage, data=s_toTest))
+
+summary(lm(richness10k ~ disease_stage, data=s_toTest))
+summary(lm(richness10k ~ BVAS_Score, data=filter(s_toTest, study_group == "Active")))
+```
+
+## Alpha diversity: Shannon diversity
+
+```{r fig.width=5, fig.height=3}
+s %>%
+  filter(Keep) %>%
+  ggplot(aes(x=disease_stage, y=shannon)) +
+    geom_boxplot() +
+    geom_point(aes(color=current_antibiotics)) +
+    scale_color_brewer(palette="Dark2") +
+    theme_bw() +
+    labs(x="Study_group", color="Current\nantibiotics",
+         y="Shannon diversity")
+
+```
+
+```{r fig.width=5, fig.height=3}
+s %>%
+  filter(Keep) %>%
+  ggplot(aes(x=BVAS_Score, y=shannon)) +
+    geom_point(aes(shape=current_antibiotics, color=study_group)) +
+    scale_color_brewer(palette="Dark2") +
+    theme_bw() +
+    scale_shape_manual(values=c(19, 1)) + 
+    labs(x="BVAS Score", shape="Current\nantibiotics", color="",
+         y="Shannon diversity")
+```
+
+```{r eval=F}
+s %>%
+  filter(Keep) %>%
+  filter(study_group=="Active") %>%
+  ggplot(aes(x=BVAS_Score, y=shannon, color=study_group)) +
+    geom_point() +
+    scale_color_brewer(palette="Set1") +
+    theme_bw() +
+    guides(color=F)+
+    #scale_shape_manual(values=c(19, 1)) + 
+    labs(x="BVAS Score", shape="Current\nantibiotics", color="",
+         y="Shannon diversity")
+ggsave("Shannon_BVAS.pdf", height=2, width=2.5, useDingbats=F)
+```
+
+There was a statistically significant decrease in the Shannon diversity index as the BVAS/WG score increased (p<0.01) 
+A greater dysbiosis (decreased diversity) in patients with active AAV compared to controls 
 
 
-### Methods
-In the first paragraph, describe the data used and general methodological approach. Subsequently, incorporate full R code necessary to retrieve and clean data, and perform analysis. Be sure to include a description of code so that others (including your future self) can understand what you are doing and why. 
+Below are ANOVA tests to check group differences in shannon diversity levels of samples. We have also used linear models to check the association  of BVAS scores and shannon diversity
+
+```{r}
+summary(aov(shannon ~ study_group, data=s_toTest))
+summary(aov(shannon ~ current_antibiotics, data=s_toTest))
+summary(aov(shannon ~ Prednisone, data=s_toTest))
+summary(aov(shannon ~ disease_stage, data=s_toTest))
+
+summary(lm(shannon ~ study_group * current_antibiotics, data=s_toTest))
+summary(lm(shannon ~ disease_stage, data=s_toTest))
+summary(lm(shannon ~ BVAS_Score, data=filter(s_toTest, study_group == "Active")))
+```
+
+## Beta diversity: Weighted UniFrac distances
+
+```{r fig.width=5, fig.height=3}
+pc <- pcoa(dist_subset(wu, s$SampleID[s$Keep]))
+pc_df <- merge(s[s$Keep,], pc$vectors[, 1:3], by.x="SampleID", by.y="row.names")
+pct_var <- round(pc$values$Relative_eig * 100)
+pc_df %>%
+  ggplot(aes(x=Axis.1, y=Axis.2, color=disease_stage, shape=current_antibiotics)) +
+  geom_point() +
+  #geom_text(aes(label=cage_name), color="black", size=3) +
+  scale_colour_brewer(palette = 'Dark2') + 
+  scale_shape_manual(values=c(19,1)) +
+  labs(
+    color="", shape="Antibiotics",
+    title="Ordination based on\nWeighted UniFrac distance",
+    x=paste0("PCoA axis 1 (", pct_var[1], "%)"),
+    y=paste0("PCoA axis 2 (", pct_var[2], "%)")) +
+  theme_bw()
+
+```
+
+We tested for difference in group centroid position between groups using weighted UniFrac distances.
+
+```{r}
+dist_toTest <- dist_subset(wu, s_toTest$SampleID)
+adonis(dist_toTest ~ study_group, data=s_toTest, permutations=100)
+adonis(dist_toTest ~ current_antibiotics, data=s_toTest, permutations=100)
+adonis(dist_toTest ~ Prednisone, data=s_toTest, permutations=100)
+adonis(dist_toTest ~ disease_stage, data=s_toTest, permutations=100)
+
+adonis(dist_toTest ~ disease_stage + current_antibiotics, data=s_toTest, permutations=100)
+```
+
+## Beta diversity: Unweighted UniFrac distances
+
+```{r fig.width=5, fig.height=3}
+pc <- pcoa(dist_subset(uu, s$SampleID[s$Keep]))
+pc_df <- merge(s[s$Keep,], pc$vectors[, 1:3], by.x="SampleID", by.y="row.names")
+pct_var <- round(pc$values$Relative_eig * 100)
+pc_df %>%
+  ggplot(aes(x=Axis.1, y=Axis.2, color=disease_stage, shape=current_antibiotics)) +
+  geom_point() +
+  #geom_text(aes(label=cage_name), color="black", size=3) +
+  scale_colour_brewer(palette = 'Dark2') + 
+  scale_shape_manual(values=c(19,1)) +
+  labs(
+    color="", shape="Antibiotics",
+    title="Ordination based on\nUnweighted UniFrac distance",
+    x=paste0("PCoA axis 1 (", pct_var[1], "%)"),
+    y=paste0("PCoA axis 2 (", pct_var[2], "%)")) +
+  theme_bw()
+
+```
+
+We tested for difference in group centroid position between groups using unweighted UniFrac distances.
+
+```{r}
+dist_toTest <- dist_subset(uu, s_toTest$SampleID)
+adonis(dist_toTest ~ study_group, data=s_toTest, permutations=100)
+adonis(dist_toTest ~ current_antibiotics, data=s_toTest, permutations=100)
+adonis(dist_toTest ~ Prednisone, data=s_toTest, permutations=100)
+adonis(dist_toTest ~ disease_stage, data=s_toTest, permutations=100)
+
+adonis(dist_toTest ~ disease_stage + current_antibiotics, data=s_toTest, permutations=100)
+```
 
 
-### Results
-Describe your results and include relevant tables, plots, and code/comments used to obtain them. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
+## Differential abundance
+
+We tested for difference in taxon abundance between the healthy controls and active AAV patients using generalized linear models.  Estimate shows estimated increase or decrease of log(Proportion) in the comparsion of two groups represented by the "term" column. The table below show the taxa that have a p value < 0.05. The p vlaues have been corrected for false discovert rate (FDR).
+
+Only the taxa that have >1% mean abundance across samples have been tested.
+
+Below shows the model results using both study group and the antibiotics usage.
+
+```{r warning=F}
+form1 <- "cbind(props100, 100-props100) ~  study_group * current_antibiotics"
+
+top_genera <- props[,s_toTest$SampleID] %>%
+  apply(1, mean) %>%
+  sort(decreasing=T)
+top_genera <- names(top_genera[top_genera > 0.01])
+
+cts_toTest <- cts_summed[top_genera,s_toTest$SampleID]
+
+summaries_df <- run_glm(cts_toTest, s_toTest, form1, 0.05) %>%
+  mutate(term = sub("study_group", "Control - ", term)) %>%
+  mutate(term = sub("^current_antibiotics.*", "Abx", term)) %>%
+  select(-conv)
+
+pander(summaries_df, split.table = Inf, digits=2)
+
+```
+
+Below shows the model results using only difference between study groups.
+
+```{r warning=F}
+form1 <- "cbind(props100, 100-props100) ~  study_group"
+
+top_genera <- props[,s_toTest$SampleID] %>%
+  apply(1, mean) %>%
+  sort(decreasing=T)
+top_genera <- names(top_genera[top_genera > 0.01])
+
+cts_toTest <- cts_summed[top_genera,s_toTest$SampleID]
+
+summaries_df <- run_glm(cts_toTest, s_toTest, form1, 0.05) %>%
+  mutate(term = sub("study_group", "Control - ", term)) %>%
+  mutate(term = sub("^current_antibiotics.*", "Abx", term)) %>%
+  select(-conv)
+
+pander(summaries_df, split.table = Inf, digits=2)
+
+```
+
+
+
+```{r fig.height=7, fig.width=6.5}
+#props[as.character(unique(summaries_df$taxa)), s_toTest$SampleID] %>%
+props[top_genera, s_toTest$SampleID] %>%
+  melt() %>%
+  setNames(c("Taxa", "SampleID", "Prop")) %>%
+  merge(s, by="SampleID") %>%
+  mutate(Taxa = sub(" ", "\n", Taxa)) %>%
+  #mutate(SampleType = sub(" ", "\n", SampleType)) %>%
+  ggplot(aes(x=study_group, y=Prop, color=current_antibiotics)) +
+    geom_boxplot(coef=100) +
+    geom_jitter(width=0.2) +
+    theme_bw() +
+    scale_color_brewer(palette="Dark2") +
+    #theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1)) +
+    scale_y_continuous(labels=scales:::percent) +
+    facet_wrap(~Taxa, scale="free", ncol = 3) +
+    labs(x="", y="Relative abundance",
+         color="Current\nantibiotics")
+
+
+```
+
+```{r eval=F}
+props[top_genera, s_toTest$SampleID] %>%
+  melt() %>%
+  setNames(c("Taxa", "SampleID", "Prop")) %>%
+  filter(grepl("Bacteroides", Taxa)) %>%
+  merge(s, by="SampleID") %>%
+  mutate(Taxa = sub(" ", "\n", Taxa)) %>%
+  #mutate(SampleType = sub(" ", "\n", SampleType)) %>%
+  ggplot(aes(x=study_group, y=Prop, color=current_antibiotics)) +
+    geom_boxplot(coef=100) +
+    #geom_jitter() +
+    theme_bw() +
+    scale_color_brewer(palette="Dark2") +
+    #theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1)) +
+    scale_y_continuous(labels=scales:::percent) +
+    #guides(color=F) +
+    #facet_wrap(~Taxa, scale="free", ncol = 3) +
+    labs(x="Genotypes", y="Relative abundance",
+         color="Current\nantibiotics")
+ggsave("Najem_Bacteroides.pdf", height=3, width=4, useDingbats=F)
+
+```
+
+##Conclusions
+Greater dysbiosis (decreased diversity) in patients with active AAV compared to controls, supporting prior gut microbiome studies in other rheumatic diseases.
+Gut microbiome communities differ between patients with active disease and healthy controls.
+Bacteroides gene abundance is similar to what has been found in other rheumatic disease studies
+Microbial communities might be related to disease pathogenesis in ANCA-associated vasculitis
+
+
+
+
+
